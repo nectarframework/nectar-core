@@ -7,6 +7,13 @@ public abstract class ThreadServiceTask implements Comparable<ThreadServiceTask>
 
 	public abstract void execute() throws Exception;
 
+	/**
+	 * Override this if your task should run in a different thread pool
+	 */
+	public String getThreadPoolName() {
+		return ThreadService.generalThreadPoolName;
+	}
+
 	public void setException(Throwable e) {
 		this.exception = e;
 	}
@@ -32,6 +39,7 @@ public abstract class ThreadServiceTask implements Comparable<ThreadServiceTask>
 		this.executeTime = executeTime;
 	}
 
+	@Override
 	public int compareTo(ThreadServiceTask otherTask) {
 		long diff = this.getExecuteTime() - otherTask.getExecuteTime();
 		if (diff < 0) {

@@ -1,16 +1,21 @@
 package org.nectarframework.base.service.thread;
 
+import java.util.HashMap;
+
 /**
- * The ThreadService manages worker threads that perform tasks asynchronously.
+ * This version of the ThreadService manages multiple pools of Threads. ThreadTasks must define which pool they are to be executed in. This allows much finer control over task priority and resource usage.
  */
 
 import java.util.HashSet;
 import java.util.PriorityQueue;
 import java.util.Stack;
+import java.util.concurrent.ConcurrentHashMap;
 
+import org.nectarframework.base.exception.ServiceUnavailableException;
 import org.nectarframework.base.service.Log;
 import org.nectarframework.base.service.Service;
 import org.nectarframework.base.service.ServiceParameters;
+import org.nectarframework.base.tools.Sanity;
 
 public class ThreadService extends Service {
 
@@ -18,22 +23,27 @@ public class ThreadService extends Service {
 
 	private boolean keepThreadsRunning = false;
 
-	private Stack<ThreadServiceWorker> threads = new Stack<ThreadServiceWorker>();
-	private Stack<ThreadServiceWorker> idleWorkers = new Stack<ThreadServiceWorker>();
-	private HashSet<ThreadServiceWorker> busyWorkers = new HashSet<ThreadServiceWorker>();
-	private PriorityQueue<ThreadServiceTask> taskQueue = new PriorityQueue<ThreadServiceTask>();
+	private ThreadPool generalThreadPool;
 
-	private int maxQueueLength = 1000;
+	private ConcurrentHashMap<String, ThreadPool> threadPools = new ConcurrentHashMap<>();
 
-	private int minWorkerThreads = 2;
-	private int maxWorkerThreads = 50;
+	private ConcurrentHashMap<ThreadPool, PriorityQueue<ThreadServiceTask>> taskQueue = new ConcurrentHashMap<>();
 
-	public boolean establishDependencies() {
+	public static final String generalThreadPoolName = "generalThreadPool";
+
+	@Override
+	protected boolean establishDependencies() throws ServiceUnavailableException {
+		// ThreadService is don't need no one!
 		return true;
 	}
 
-	public boolean isRunning() {
-		return (keepThreadsRunning);
+	@Override
+	public void checkParameters(ServiceParameters sp) {
+		int minWorkerThreads = sp.getInt("minWorkerThreads", 1, 1000, 10);
+		int maxWorkerThreads = sp.getInt("maxWorkerThreads", 1, 10000, 20);
+		int maxQueueLength = sp.getInt("maxQueueLength", 1, Integer.MAX_VALUE, 10000);
+		generalThreadPool = new ThreadPool(this, generalThreadPoolName, minWorkerThreads, maxWorkerThreads, maxQueueLength);
+		threadPools.put(generalThreadPoolName, generalThreadPool);
 	}
 
 	@Override
@@ -41,15 +51,12 @@ public class ThreadService extends Service {
 		keepThreadsRunning = true;
 		masterThread = new MasterThread(this);
 
-		for (int i = 0; i < minWorkerThreads; i++) {
-			ThreadServiceWorker tsw = new ThreadServiceWorker(this);
-			threads.add(tsw);
-		}
 		masterThread.start();
-		for (ThreadServiceWorker tsw : threads) {
-			tsw.start();
-			idleWorkers.add(tsw);
+
+		for (ThreadPool threadPool : threadPools.values()) {
+			threadPool.init();
 		}
+
 		return true;
 	}
 
@@ -58,24 +65,12 @@ public class ThreadService extends Service {
 		return true;
 	}
 
-	/**
-	 * a ThreadServiceTask turns in it's ThreadServiceWorker once it's
-	 * completed.
-	 * 
-	 * @param worker
-	 */
-	public synchronized void threadReturn(ThreadServiceWorker worker) {
-		if (!taskQueue.isEmpty()) {
-			ThreadServiceTask task = taskQueue.poll();
-			this.notify();
-			worker.setTask(task);
-		} else {
-			worker.setTask(null);
-			busyWorkers.remove(worker);
-			idleWorkers.add(worker);
+	public void wakeUp() {
+		synchronized(masterThread) {
+			masterThread.notify();
 		}
 	}
-
+	
 	/**
 	 * Execute the given task as soon as possible
 	 * 
@@ -87,7 +82,10 @@ public class ThreadService extends Service {
 			Log.warn("ThreadService was asked to execute a task while shut down, request ignored.");
 		} else if (idleWorkers.empty()) {
 			if (threads.size() < maxWorkerThreads) {
-				ThreadServiceWorker tsw = new ThreadServiceWorker(this);
+				Sanity.nn(task.getThreadPoolName());
+				ThreadPool threadPool = threadPools.get(task.getThreadPoolName());
+				Sanity.nn(threadPool);
+				ThreadServiceWorker tsw = new ThreadServiceWorker(this, threadPool);
 				tsw.start();
 				threads.add(tsw);
 				tsw.setTask(task);
@@ -101,9 +99,10 @@ public class ThreadService extends Service {
 					// let's just wait a while
 					// Log.trace("ThreadService task queue is full. waiting a
 					// bit.");
-					
-					// TODO: Benchmark difference between Thread.wait(1); and Thread.yield();
-						Thread.yield();
+
+					// TODO: Benchmark difference between Thread.wait(1); and
+					// Thread.yield();
+					Thread.yield();
 				}
 				taskQueue.add(task);
 			}
@@ -121,6 +120,7 @@ public class ThreadService extends Service {
 	protected synchronized boolean shutdown() {
 		keepThreadsRunning = false;
 		this.masterThread.notify();
+		
 		try {
 			this.masterThread.join(1000);
 		} catch (InterruptedException e1) {
@@ -144,13 +144,6 @@ public class ThreadService extends Service {
 		Log.fatal(task.getClass().getName(), e);
 	}
 
-	@Override
-	public void checkParameters(ServiceParameters sp) {
-		minWorkerThreads = sp.getInt("minWorkerThreads", 1, 1000, 10);
-		maxWorkerThreads = sp.getInt("maxWorkerThreads", 1, 10000, 20);
-		maxQueueLength = sp.getInt("maxQueueLength", 1, Integer.MAX_VALUE, 10000);
-	}
-
 	public void waitOn(ThreadServiceTask task) {
 		synchronized (task) {
 			while (!task.isComplete()) {
@@ -161,6 +154,10 @@ public class ThreadService extends Service {
 				}
 			}
 		}
+	}
+
+	public boolean isRunning() {
+		return keepThreadsRunning;
 	}
 
 	/**
@@ -189,7 +186,7 @@ public class ThreadService extends Service {
 	}
 
 	/**
-	 * PLACEHOLDER METHOD / NOT IMPLEMENTED! 
+	 * PLACEHOLDER METHOD / NOT IMPLEMENTED!
 	 * 
 	 * Executes the given task immediately, then at least every delay
 	 * milliseconds afterwards. It will not execute task again unless the
@@ -197,8 +194,10 @@ public class ThreadService extends Service {
 	 * 
 	 * @param task
 	 * @param delay
-	 */	
+	 */
 	public synchronized void executeRepeat(ThreadServiceTask task, long delay) {
-		//TODO: implement me!!
+		// TODO: implement me!!
 	}
+
+
 }

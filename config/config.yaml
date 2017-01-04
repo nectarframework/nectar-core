@@ -1,0 +1,13 @@
+---
+
+config: 
+  version: 1.0
+  node:
+    group: client
+    service:
+      class: org.nectarframework.base.service.thread.ThreadService
+      param: 
+        - name: minWorkerThreads
+          value: 10
+        - name: maxWorkThreads
+          value: 50

@@ -2,11 +2,13 @@ package org.nectarframework.base.service.thread;
 
 public class ThreadServiceWorker extends Thread {
 	private ThreadService ts = null;
+	private ThreadPool threadPool = null;
 	private ThreadServiceTask task = null;
 
-	public ThreadServiceWorker(ThreadService ts) {
+	public ThreadServiceWorker(ThreadService ts, ThreadPool threadPool) {
 		super("ThreadServiceWorker");
 		this.ts = ts;
+		this.threadPool = threadPool;
 	}
 
 	public void run() {
@@ -22,7 +24,8 @@ public class ThreadServiceWorker extends Thread {
 				synchronized(task) {
 					task.notifyAll();
 				}
-				ts.threadReturn(this);
+				task = null;
+				threadPool.threadReturn(this);
 			}
 			try {
 				synchronized (this) {
@@ -38,4 +41,7 @@ public class ThreadServiceWorker extends Thread {
 		this.task = task;
 	}
 
+	public ThreadPool getThreadPool() {
+		return threadPool;
+	}
 }

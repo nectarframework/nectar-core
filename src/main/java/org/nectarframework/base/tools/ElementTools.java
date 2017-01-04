@@ -20,6 +20,7 @@ import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
+import org.yaml.snakeyaml.Yaml;
 
 /**
  * Structured data. docs/Data Transport.txt
@@ -32,7 +33,7 @@ import org.xml.sax.SAXException;
 public class ElementTools {
 
 
-	public static void toNDOJson(Element elm, OutputStream os) throws IOException {
+	public static void toJson(Element elm, OutputStream os) throws IOException {
 		os.write("{".getBytes());
 		recurseOutputElmJson(elm, os);
 		os.write("}".getBytes());
@@ -103,13 +104,13 @@ public class ElementTools {
 		}
 	}
 
-	public static void toNDOJson(Element elm, StringBuffer sb) {
+	public static void toJson(Element elm, StringBuffer sb) {
 		sb.append("{");
-		recurseToNDOJson(elm, sb);
+		recurseToJson(elm, sb);
 		sb.append("}");
 	}
 
-	private static void recurseToNDOJson(Element elm, StringBuffer sb) {
+	private static void recurseToJson(Element elm, StringBuffer sb) {
 		Map<String, String> attribs = elm.getAttributes();
 		LinkedList<Element> children = elm.getChildren();
 		sb.append("\"n\":\"" + elm.getName() + "\"");
@@ -136,7 +137,7 @@ public class ElementTools {
 				}
 				first = false;
 				sb.append(("{"));
-				recurseToNDOJson(child, sb);
+				recurseToJson(child, sb);
 				sb.append("}");
 			}
 			sb.append("]");
@@ -283,6 +284,24 @@ public class ElementTools {
 		Element root = fromXmlRecurse(rootXElm);
 
 		return root;
+	}
+	
+	public static String toYaml(Element elm) {
+		StringBuffer sb = new StringBuffer();
+		
+		return sb.toString();
+	}
+	
+	public static Element fromYaml(String yamlString) {
+		Yaml yaml = new Yaml();
+		@SuppressWarnings("rawtypes")
+		Map map = (Map)yaml.load(yamlString);
+		String rootElmName = map.get("root").toString();
+		Element elm = new Element(rootElmName);
+		
+		
+		
+		return elm;
 	}
 
 }

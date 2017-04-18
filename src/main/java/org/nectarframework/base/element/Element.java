@@ -9,11 +9,14 @@ import org.apache.xerces.impl.dv.util.Base64;
 import org.nectarframework.base.tools.StringTools;
 
 /**
- * The Element is basically a <String name, HashMap<String attribute, String value>, List<Element> children>
+ * The Element is basically a <String name, HashMap<String attribute, String
+ * value>, List<Element> children>
  * 
- * It mimics the least common ground between data structures that can be written in xml, json, yaml and others.
+ * It mimics the least common ground between data structures that can be written
+ * in xml, json, yaml and others.
  * 
- * The Element allows you to pass structured data throughout Nectar and between various markup languages. 
+ * The Element allows you to pass structured data throughout Nectar and between
+ * various markup languages.
  * 
  * @author skander
  * 
@@ -21,11 +24,15 @@ import org.nectarframework.base.tools.StringTools;
 
 public class Element {
 
-	
-
-	private final String name;
+	private String name;
 	private Map<String, String> attributes = new HashMap<String, String>();
 	private LinkedList<Element> children = new LinkedList<Element>();
+
+	/**
+	 * This should only be called by Jackson databind...
+	 */
+	protected Element() {
+	}
 
 	/**
 	 * 
@@ -275,7 +282,6 @@ public class Element {
 		return this;
 	}
 
-
 	public String toString() {
 		StringBuffer s = new StringBuffer("\nroot=" + name + " " + StringTools.mapSSToString(attributes));
 		for (Element c : children) {
@@ -294,10 +300,10 @@ public class Element {
 	}
 
 	public StringBuffer toStringBuffer(StringBuffer sb, int tabInc) {
-		sb.append(toStringAddTabs(tabInc)+name+ " "+StringTools.mapSSToString(attributes));
+		sb.append(toStringAddTabs(tabInc) + name + " " + StringTools.mapSSToString(attributes));
 		for (Element c : children) {
 			sb.append("\n");
-			c.toStringBuffer(sb, tabInc+1);
+			c.toStringBuffer(sb, tabInc + 1);
 		}
 		return sb;
 	}
@@ -353,7 +359,7 @@ public class Element {
 	public void addAll(Collection<Element> children) {
 		children.forEach(c -> add(c));
 	}
-	
+
 	@Override
 	public int hashCode() {
 		final int prime = 31;

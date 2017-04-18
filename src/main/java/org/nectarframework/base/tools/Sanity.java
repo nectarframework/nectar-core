@@ -4,7 +4,7 @@ import java.util.Collection;
 
 /**
  * This class contains a few sanity check methods to put the blame back where it
- * belongs. 
+ * belongs.
  * 
  * @author skander
  *
@@ -16,7 +16,8 @@ public class Sanity {
 	 * 
 	 * 
 	 * @param o
-	 * @throws NullPointerException if o == null.
+	 * @throws NullPointerException
+	 *             if o == null.
 	 */
 	public static void nn(Object o) {
 		if (o == null) {
@@ -24,13 +25,14 @@ public class Sanity {
 		}
 	}
 
-	
 	/**
 	 * Not empty
 	 * 
 	 * @param os
-	 * @throws NullPointerException if os == null.
-	 * @throws IllegalArgumentException if os.length <= 0
+	 * @throws NullPointerException
+	 *             if os == null.
+	 * @throws IllegalArgumentException
+	 *             if os.length <= 0
 	 */
 	public static void ne(Object... os) {
 		nn(os);
@@ -43,13 +45,22 @@ public class Sanity {
 	 * Not empty
 	 * 
 	 * @param os
-	 * @throws NullPointerException if os == null.
-	 * @throws IllegalArgumentException if os.size() <= 0
+	 * @throws NullPointerException
+	 *             if os == null.
+	 * @throws IllegalArgumentException
+	 *             if os.size() <= 0
 	 */
 	public static void ne(Collection<?> os) {
 		nn(os);
 		if (os.size() <= 0) {
 			throw new IllegalArgumentException();
 		}
+	}
+
+	/**
+	 * Something threw an impossible exception
+	 */
+	public static void np(Exception e) {
+		throw new IllegalStateException("This Exception really shouldn't have occured...", e);
 	}
 }

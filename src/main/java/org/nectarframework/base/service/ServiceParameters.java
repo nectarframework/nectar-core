@@ -29,7 +29,7 @@ public class ServiceParameters {
 		return str;
 	}
 
-	public static ServiceParameters parsesp(Element serviceElement) {
+	public static ServiceParameters parseServiceParamtersFromElement(Element serviceElement) {
 		HashMap<String, String> params = new HashMap<String, String>();
 		HashMap<String, LinkedList<String>> paramSets = new HashMap<String, LinkedList<String>>();
 

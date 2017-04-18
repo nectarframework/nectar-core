@@ -1,92 +1,83 @@
 package org.nectarframework.base.service;
 
-import java.io.File;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-import org.nectarframework.base.element.Element;
-import org.nectarframework.base.exception.ConfigurationException;
+import org.nectarframework.base.config.Configuration;
 import org.nectarframework.base.exception.ServiceUnavailableException;
 import org.nectarframework.base.exception.ServiceUnavailableRuntimeException;
 
-public final class ServiceRegister {
-	private Configuration config = null;
-	private Element configElement = null;
+public final class Nectar {
+	public static final String VERSION = "0.1.0";
+
+	Configuration config = null;
 	/** only one instance of this class allowed!! */
-	private static ServiceRegister instance = null;
+	static Nectar instance = null;
 
-	private RUN_STATE runState = RUN_STATE.none;
+	RunState runState = RunState.none;
 
+	HashMap<String, Service> serviceDirectory = new HashMap<String, Service>();
 	/**
 	 * if you're not on the register, you're not a real Service...
 	 */
-	private HashMap<Class<? extends Service>, Service> registerByClass;
+	HashMap<Class<? extends Service>, Service> registerByClass = new HashMap<>();
+	HashMap<Service, List<Service>> dependencies = new HashMap<>();
 
-	private HashMap<Service, List<Service>> dependancies;
+	NectarShutdownHandler mainShutdownHandler;
 
-	public ServiceRegister() {
+	public enum RunState {
+		none, configured, initialized, running, restarting, shutdown
+	}
+
+	public enum ExitCode {
+		OK(0), BAD(-1), CONFIG_ERROR(-2), INITIALIZATION_ERROR(-3);
+
+		private int exitCodeValue;
+
+		ExitCode(int exitCodeValue) {
+			this.exitCodeValue = exitCodeValue;
+		}
+
+		public int getValue() {
+			return exitCodeValue;
+		}
+	}
+
+	Nectar() {
+	}
+
+	public static boolean run(Configuration config) {
+		return new Nectar().runNectar(config);
+	}
+
+	synchronized boolean runNectar(Configuration config) {
 		if (instance != null) { // there can only be one!!
-			throw new IllegalStateException("Cannot instantiate ServiceRegister more than once.");
+			throw new IllegalStateException("Cannot instantiate Nectar more than once.");
 		}
 		instance = this;
-		registerByClass = new HashMap<Class<? extends Service>, Service>();
-		dependancies = new HashMap<Service, List<Service>>();
+		setConfig(config);
+		hookInNewShutdownHandler();
+		return (initServices() && startServices());
 	}
 
-	/**
-	 * RUN_STATE determines the state of Nectar.
-	 * 
-	 * none - pre-initialization stage. configChecked - the config.xml for
-	 * nectar.base.config.Configuration has been found, and seems to be sane.
-	 * initialized - all services have passed init() and returned true. running
-	 * - all services have passed run() and returned true. restarting - some
-	 * services are undergoing a reinit. ... to be impelemented shutdown - all
-	 * services have fully shut down, releasing all I/O safely.
-	 * 
-	 *
-	 */
-	public enum RUN_STATE {
-		none, configChecked, initialized, running, restarting, shutdown
+	synchronized void hookInNewShutdownHandler() {
+		if (mainShutdownHandler != null) {
+			Runtime.getRuntime().removeShutdownHook(mainShutdownHandler);
+		}
+		mainShutdownHandler = new NectarShutdownHandler(this);
+		Runtime.getRuntime().addShutdownHook(mainShutdownHandler);
 	}
 
-	private HashMap<String, Service> serviceDirectory = new HashMap<String, Service>();
-
-	public void setConfiguration(Configuration config) {
+	void setConfig(Configuration config) {
+		if (config == null) {
+			throw new NullPointerException("Cannot set a null Configuration");
+		}
+		if (runState != RunState.none) {
+			throw new IllegalStateException("Nectar is already running.");
+		}
 		this.config = config;
-	}
-
-	/**
-	 * Let's start Nectar in Mode: Alone
-	 * 
-	 * @return
-	 */
-	public boolean initAlone() {
-		// this.runMode = RUN_MODE.alone;
-		return this.init();
-	}
-
-	/**
-	 * Let's start Nectar in Mode: Master
-	 * 
-	 * @return
-	 */
-
-	public boolean initMaster() {
-		// this.runMode = RUN_MODE.master;
-		return this.init();
-	}
-
-	/**
-	 * Let's start Nectar in Mode: Node
-	 * 
-	 * @return
-	 */
-
-	public boolean initNode() {
-		// this.runMode = RUN_MODE.node;
-		return this.init();
+		runState = RunState.configured;
 	}
 
 	/**
@@ -101,9 +92,9 @@ public final class ServiceRegister {
 	 * @return
 	 */
 	@SuppressWarnings("unchecked")
-	public boolean init() {
-		Log.info("ServiceRegister is initializing services for "+config.getNodeName()+"@"+config.getNodeGroup());
-		if (runState != RUN_STATE.configChecked && runState != RUN_STATE.restarting) {
+	boolean initServices() {
+		Log.info("ServiceRegister is initializing services for " + config.getNodeName() + "@" + config.getNodeGroup());
+		if (runState != RunState.configured && runState != RunState.restarting) {
 			throw new IllegalStateException();
 		}
 
@@ -138,11 +129,11 @@ public final class ServiceRegister {
 			}
 		}
 
-		this.runState = RUN_STATE.initialized;
+		this.runState = RunState.initialized;
 		return true;
 	}
 
-	private boolean initService(Service s) throws ServiceUnavailableException {
+	boolean initService(Service s) throws ServiceUnavailableException {
 		if (!s.establishDependencies()) {
 			// Log.fatal("ServiceResgster.init: Service " +
 			// s.getClass().getName() +
@@ -165,7 +156,14 @@ public final class ServiceRegister {
 		return true;
 	}
 
-	public boolean shutdown() {
+	public static boolean stop() {
+		if (instance != null) {
+			return instance.shutdown();
+		}
+		return true;
+	}
+
+	boolean shutdown() {
 		Log.info("[ServiceRegister] shutdown triggered.");
 		for (Service s : serviceDirectory.values()) {
 			shutdownDependancies(s);
@@ -174,8 +172,8 @@ public final class ServiceRegister {
 		for (Service s : serviceDirectory.values()) {
 			s.__rootServiceShutdown();
 		}
-		if (runState != RUN_STATE.restarting) {
-			runState = RUN_STATE.shutdown;
+		if (runState != RunState.restarting) {
+			runState = RunState.shutdown;
 		}
 		serviceDirectory.clear();
 		instance = null;
@@ -183,57 +181,7 @@ public final class ServiceRegister {
 		return true;
 	}
 
-	public boolean restart(File configFile) {
-		// FIXME: this isn't reading / refreshing the config file...
-		Log.info("ServiceRegister is restarting services...");
-		if (runState != RUN_STATE.running) {
-			throw new IllegalStateException();
-		}
-		runState = RUN_STATE.restarting;
-
-		Configuration newConfig = new Configuration(this);
-
-		boolean newConfigSafe = false;
-
-		try {
-			newConfigSafe = newConfig.parseFullConfig(configElement);
-		} catch (ConfigurationException e) {
-			Log.fatal("Configuration Problem detected, restart aborted", e);
-		}
-
-		if (newConfigSafe) {
-			if (shutdown()) {
-				config = newConfig;
-				if (init()) {
-					begin();
-				}
-			}
-		}
-		return false;
-	}
-
-	public boolean configCheck() {
-
-		if (Charset.defaultCharset().name().compareTo("UTF-8") != 0) {
-			Log.warn("Nectar should really only run with UTF-8 Charset. default charset is: " + Charset.defaultCharset()
-					+ ". This might cause weird problems. Please check your java installation / runtime options. ");
-		}
-
-		try {
-			boolean configValid = config.parseFullConfig(configElement);
-			if (configValid) {
-				this.runState = RUN_STATE.configChecked;
-				return true;
-			}
-			Log.warn("Configuration Parse Failed.");
-			return false;
-		} catch (ConfigurationException e) {
-			Log.fatal("Configuration Problem detected", e);
-		}
-		return false;
-	}
-
-	public boolean begin() {
+	boolean startServices() {
 		Log.info("ServiceRegister is running services...");
 		List<Service> serviceList = config.getServiceList(this.config.getNodeGroup());
 		if (serviceList == null) {
@@ -251,12 +199,12 @@ public final class ServiceRegister {
 				System.exit(-1);
 			}
 		}
-		this.runState = RUN_STATE.running;
+		this.runState = RunState.running;
 		Log.info("ServiceRegister: All services are up and running.");
 		return true;
 	}
 
-	public static ServiceRegister getInstance() {
+	public static Nectar getInstance() {
 		return instance;
 	}
 
@@ -264,16 +212,7 @@ public final class ServiceRegister {
 		return config;
 	}
 
-	public void setConfigElement(Element configElement) {
-		this.configElement = configElement;
-	}
-
-	public static Service addServiceDependancy(Service service, Class<? extends Service> serviceClass)
-			throws ServiceUnavailableException {
-		return instance._addServiceDependancy(service, serviceClass);
-	}
-
-	private Service _addServiceDependancy(Service service, Class<? extends Service> serviceClass)
+	Service addServiceDependancy(Service service, Class<? extends Service> serviceClass)
 			throws ServiceUnavailableException {
 		Service dependant = instance.registerByClass.get(serviceClass);
 		if (dependant == null) {
@@ -286,27 +225,23 @@ public final class ServiceRegister {
 			}
 		}
 
-		if (dependancies.containsKey(service)) {
-			dependancies.get(service).add(dependant);
+		if (dependencies.containsKey(service)) {
+			dependencies.get(service).add(dependant);
 		} else {
 			ArrayList<Service> list = new ArrayList<Service>();
 			list.add(dependant);
-			dependancies.put(service, list);
+			dependencies.put(service, list);
 		}
 
 		return dependant;
 	}
 
-	public static boolean shutdownDependancies(Service service) {
-		return instance._shutdownDependancies(service);
-	}
-
-	public boolean _shutdownDependancies(Service service) {
-		List<Service> list = dependancies.get(service);
+	boolean shutdownDependancies(Service service) {
+		List<Service> list = dependencies.get(service);
 
 		for (Service dependant : list) {
 			if (dependant.getRunState() == Service.State.running) {
-				if (!_shutdownDependancies(dependant)) {
+				if (!shutdownDependancies(dependant)) {
 					return false;
 				}
 				if (!dependant.rootServiceRun()) {
@@ -326,23 +261,22 @@ public final class ServiceRegister {
 	 * @return
 	 * @throws ServiceUnavailableRuntimeException
 	 */
-	@SuppressWarnings("unchecked")
 	public static <T extends Service> T getService(Class<T> serviceClass) {
 		if (instance == null) {
 			throw new ServiceUnavailableRuntimeException("Nectar is not running, or not available.");
 		}
 		switch (instance.runState) {
+		case initialized:
+		case running:
+			Service service = instance.getServiceByClass(serviceClass);
+			if (service == null)
+				return null;
 		case none:
 			throw new ServiceUnavailableRuntimeException("Nectar is not started.");
 		case restarting:
 			throw new ServiceUnavailableRuntimeException("Nectar is restarting.");
-		case configChecked:
-		case initialized:
-		case running:
-			Service service = instance.registerByClass.get(serviceClass);
-			if (service == null)
-				return null;
-			return (T) service;
+		case configured:
+			throw new ServiceUnavailableRuntimeException("Nectar is configured, but not yet initialized.");
 		case shutdown:
 			throw new ServiceUnavailableRuntimeException("Nectar is shut down.");
 		}
@@ -350,4 +284,10 @@ public final class ServiceRegister {
 		throw new ServiceUnavailableRuntimeException(
 				"Nectar is in an unknown RUN_STATE, and has no idea what's going on.");
 	}
+
+	@SuppressWarnings("unchecked")
+	<T> T getServiceByClass(Class<T> serviceClass) {
+		return (T) this.registerByClass.get(serviceClass);
+	}
+
 }

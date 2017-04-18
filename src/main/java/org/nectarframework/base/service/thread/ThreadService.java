@@ -1,21 +1,17 @@
 package org.nectarframework.base.service.thread;
 
-import java.util.HashMap;
+
 
 /**
  * This version of the ThreadService manages multiple pools of Threads. ThreadTasks must define which pool they are to be executed in. This allows much finer control over task priority and resource usage.
  */
 
-import java.util.HashSet;
-import java.util.PriorityQueue;
-import java.util.Stack;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.nectarframework.base.exception.ServiceUnavailableException;
 import org.nectarframework.base.service.Log;
 import org.nectarframework.base.service.Service;
 import org.nectarframework.base.service.ServiceParameters;
-import org.nectarframework.base.tools.Sanity;
 
 public class ThreadService extends Service {
 
@@ -26,8 +22,6 @@ public class ThreadService extends Service {
 	private ThreadPool generalThreadPool;
 
 	private ConcurrentHashMap<String, ThreadPool> threadPools = new ConcurrentHashMap<>();
-
-	private ConcurrentHashMap<ThreadPool, PriorityQueue<ThreadServiceTask>> taskQueue = new ConcurrentHashMap<>();
 
 	public static final String generalThreadPoolName = "generalThreadPool";
 
@@ -80,40 +74,14 @@ public class ThreadService extends Service {
 	public synchronized void execute(ThreadServiceTask task) {
 		if (!keepThreadsRunning) {
 			Log.warn("ThreadService was asked to execute a task while shut down, request ignored.");
-		} else if (idleWorkers.empty()) {
-			if (threads.size() < maxWorkerThreads) {
-				Sanity.nn(task.getThreadPoolName());
-				ThreadPool threadPool = threadPools.get(task.getThreadPoolName());
-				Sanity.nn(threadPool);
-				ThreadServiceWorker tsw = new ThreadServiceWorker(this, threadPool);
-				tsw.start();
-				threads.add(tsw);
-				tsw.setTask(task);
-				synchronized (tsw) {
-					tsw.notify();
-				}
-				busyWorkers.add(tsw);
-			} else {
-				while (taskQueue.size() >= this.maxQueueLength) {
-					// taskQueue is full.
-					// let's just wait a while
-					// Log.trace("ThreadService task queue is full. waiting a
-					// bit.");
-
-					// TODO: Benchmark difference between Thread.wait(1); and
-					// Thread.yield();
-					Thread.yield();
-				}
-				taskQueue.add(task);
-			}
-		} else {
-			ThreadServiceWorker worker = idleWorkers.pop();
-			worker.setTask(task);
-			synchronized (worker) {
-				worker.notify();
-			}
-			busyWorkers.add(worker);
+			return;
 		}
+		ThreadPool threadPool = generalThreadPool;
+		if (threadPools.containsKey(task.getThreadPoolName())) {
+			threadPool = threadPools.get(task.getThreadPoolName());
+		}
+		
+		threadPool.execute(task);
 	}
 
 	@Override
@@ -126,17 +94,9 @@ public class ThreadService extends Service {
 		} catch (InterruptedException e1) {
 			Log.warn(e1);
 		}
-		for (ThreadServiceWorker tsw : threads) {
-			try {
-				tsw.notify();
-				tsw.join(1000);
-			} catch (InterruptedException e) {
-				Log.warn(e);
-			}
+		for (ThreadPool threadPool: threadPools.values()) {
+			threadPool.shutdown();
 		}
-		this.busyWorkers.clear();
-		this.idleWorkers.clear();
-		this.threads.clear();
 		return true;
 	}
 

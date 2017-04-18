@@ -6,7 +6,7 @@ import java.util.concurrent.CopyOnWriteArraySet;
 import org.nectarframework.base.exception.ConfigurationException;
 import org.nectarframework.base.service.Service;
 import org.nectarframework.base.service.ServiceParameters;
-import org.nectarframework.base.service.ServiceRegister;
+import org.nectarframework.base.service.Nectar;
 import org.nectarframework.base.service.thread.ThreadService;
 import org.nectarframework.base.service.thread.ThreadServiceTask;
 
@@ -31,7 +31,7 @@ public final class EventService extends Service {
 
 	@Override
 	public boolean establishDependencies() {
-		threadService = (ThreadService) ServiceRegister.getService(ThreadService.class);
+		threadService = (ThreadService) Nectar.getService(ThreadService.class);
 		return true;
 	}
 

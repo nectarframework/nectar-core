@@ -26,6 +26,16 @@ public class RandUtils {
 		return rand(false).nextInt(bound);
 	}
 
+
+	/**
+	 * a random float between 0 and 1
+	 * 
+	 * @return
+	 */
+	private static float nextFloat() {
+		return rand(false).nextFloat();
+	}
+	
 	/**
 	 * returns a random integer between i inclusive and j exclusive.
 	 * 
@@ -69,9 +79,17 @@ public class RandUtils {
 		int len = nextInt(i, j);
 		byte[] sa = new byte[len];
 		for (int t = 0; t < len; t++) {
-			sa[t] = (byte) (65 + nextInt(26));
+			sa[t] = nextUpperCase();
 		}
 		return new String(sa);
+	}
+	
+	public static byte nextUpperCase() {
+		return (byte) (65 + nextInt(26));
+	}
+
+	public static byte nextLowerCase() {
+		return (byte) (97 + nextInt(26));
 	}
 
 	/**
@@ -87,10 +105,34 @@ public class RandUtils {
 		int len = nextInt(i, j);
 		byte[] sa = new byte[len];
 		for (int t = 0; t < len; t++) {
-			sa[t] = (byte) (97 + nextInt(26));
+			sa[t] = nextLowerCase();
 		}
 		return new String(sa);
 	}
+
+	/**
+	 * Create a String of between i and j in length, of random characters a-z
+	 * and A-Z. The ratio determines the probability of upperCase characters.
+	 * (0.1 gives 10% uppercase, 90% lower case on average) through z.
+	 * 
+	 * @param i
+	 * @param j
+	 * @param d
+	 * @return
+	 */
+	public static String nextPlainStringMixedCase(int i, int j, float d) {
+		int len = nextInt(i, j);
+		byte[] sa = new byte[len];
+		for (int t = 0; t < len; t++) {
+			if (nextFloat() <= d) {
+				sa[t] = nextUpperCase();
+			} else {
+				sa[t] = nextLowerCase();
+			}
+		}
+		return new String(sa);
+	}
+
 
 	/**
 	 * Create a String of between i and j in length, of random UTF-8 characters.

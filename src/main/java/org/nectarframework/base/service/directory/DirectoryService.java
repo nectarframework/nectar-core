@@ -1,25 +1,24 @@
 package org.nectarframework.base.service.directory;
 
+import java.io.File;
+
 /**
  * The DirectoryService maps request paths to Actions.
  */
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
 import org.nectarframework.base.element.Element;
+import org.nectarframework.base.element.ElementReader;
 import org.nectarframework.base.exception.ServiceUnavailableException;
 import org.nectarframework.base.form.Form;
 import org.nectarframework.base.service.Log;
 import org.nectarframework.base.service.ServiceParameters;
 import org.nectarframework.base.service.pathfinder.IPathFinder;
 import org.nectarframework.base.tools.StringTools;
-import org.nectarframework.base.tools.ElementTools;
-import org.xml.sax.SAXException;
 
 /**
  * The DirectoryService is mainly a pathfinder: it maps requests for a given
@@ -56,14 +55,14 @@ public class DirectoryService extends IPathFinder {
 	private boolean buildFromFile(String cfp) {
 		pathConfigElement = null;
 		try {
-			pathConfigElement = ElementTools.fromXml(new FileInputStream(cfp));
-		} catch (FileNotFoundException e) {
-			Log.fatal(e);
-			return false;
-		} catch (SAXException e) {
-			Log.fatal(e);
-			return false;
+			pathConfigElement = ElementReader.read(new File(cfp));
 		} catch (IOException e) {
+			Log.fatal(e);
+			return false;
+		} catch (InstantiationException e) {
+			Log.fatal(e);
+			return false;
+		} catch (IllegalAccessException e) {
 			Log.fatal(e);
 			return false;
 		}

@@ -20,10 +20,13 @@ public abstract class Service {
 
 	private State runState = State.none;
 
-	protected final void setParameters(ServiceParameters sp) throws ConfigurationException {
+	public final void setParameters(ServiceParameters sp) throws ConfigurationException {
 		if (runState == State.none) {
 			checkParameters(sp);
 			serviceParameters = sp;
+		} else {
+			throw new IllegalStateException(
+					"Cannot reconfigure a Service that has already been initialized or is already running.");
 		}
 	}
 
@@ -34,7 +37,7 @@ public abstract class Service {
 	protected final void setRunState(State rs) {
 		this.runState = rs;
 	}
-	
+
 	protected final ServiceParameters getParameters() {
 		return this.serviceParameters;
 	}
@@ -52,14 +55,16 @@ public abstract class Service {
 	 * fields in the implementing Service class.
 	 * 
 	 * By validated I mean passing min/max checks or a regex check, but not
-
+	 * 
 	 * something that can send an Exception unexpectedly, like a host name
 	 * lookup. In this phase of the startup, all input/output, and all other
 	 * Services should be considered unavailable.
 	 * 
 	 * All we're doing is checking if our configuration file is just remotely
 	 * sane, and setting some default values.
-	 * @param sp TODO
+	 * 
+	 * @param sp
+	 *            TODO
 	 * 
 	 * @throws ConfigurationException
 	 */
@@ -96,8 +101,8 @@ public abstract class Service {
 	 *             if the serviceClass couldn't be found, or isn't configured to
 	 *             be started.
 	 */
-	protected <T extends Service>T dependency(Class<T> serviceClass) throws ServiceUnavailableException {
-		Service service = ServiceRegister.addServiceDependancy(this, serviceClass);
+	protected <T extends Service> T dependency(Class<T> serviceClass) throws ServiceUnavailableException {
+		Service service = Nectar.getInstance().addServiceDependancy(this, serviceClass);
 		if (service == null) {
 			throw new ServiceUnavailableException(
 					this.getClass().getName() + " requires the Service " + serviceClass.getName());
@@ -128,7 +133,7 @@ public abstract class Service {
 	protected final boolean __rootServiceShutdown() {
 		if (runState != State.running)
 			throw new IllegalStateException();
-		if (ServiceRegister.shutdownDependancies(this) && shutdown()) {
+		if (Nectar.getInstance().shutdownDependancies(this) && shutdown()) {
 			this.runState = State.none;
 			return true;
 		}

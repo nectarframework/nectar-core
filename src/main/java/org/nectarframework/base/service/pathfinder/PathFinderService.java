@@ -1,7 +1,6 @@
 package org.nectarframework.base.service.pathfinder;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -10,14 +9,13 @@ import java.util.Vector;
 
 import org.nectarframework.base.action.Action;
 import org.nectarframework.base.element.Element;
+import org.nectarframework.base.element.ElementReader;
 import org.nectarframework.base.exception.ConfigurationException;
 import org.nectarframework.base.exception.ServiceUnavailableException;
 import org.nectarframework.base.form.Form;
 import org.nectarframework.base.service.Log;
 import org.nectarframework.base.service.ServiceParameters;
 import org.nectarframework.base.tools.StringTools;
-import org.nectarframework.base.tools.ElementTools;
-import org.xml.sax.SAXException;
 
 public class PathFinderService extends IPathFinder {
 
@@ -30,8 +28,8 @@ public class PathFinderService extends IPathFinder {
 	public void checkParameters(ServiceParameters sp) throws ConfigurationException {
 		String pathConfigFile = sp.getString("pathConfigFile", "config/pathConfig.xml");
 		try {
-			pathConfigElm = ElementTools.fromXml(new FileInputStream(new File(pathConfigFile)));
-		} catch (SAXException | IOException e) {
+			pathConfigElm = ElementReader.read(new File(pathConfigFile));
+		} catch (IOException | InstantiationException | IllegalAccessException e) {
 			throw new ConfigurationException(e);
 		}
 	}

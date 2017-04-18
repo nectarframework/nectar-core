@@ -13,6 +13,7 @@ import org.nectarframework.base.tools.ByteArray;
 import org.nectarframework.base.tools.RandUtils;
 import org.nectarframework.base.tools.Tuple;
 
+
 public class BitmapTest {
 
 	@Test
